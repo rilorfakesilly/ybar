@@ -268,14 +268,30 @@ end
 -- tp+click
 local function tpClick(item)
     local pos=getPos(item); if not pos then return end
-    local cd=item:FindFirstChildWhichIsA("ClickDetector",true); if not cd then return end
     local c=LP.Character; if not c then return end
     local hrp=c:FindFirstChild("HumanoidRootPart"); if not hrp then return end
-    hrp.CFrame=CFrame.new(pos+Vector3.new(0, 3, 0)) -- teleport slightly above
-    task.wait(0.25) -- wait longer for server to register pos
-    pcall(fireclickdetector, cd)
-    task.wait(0.1)
-    pcall(fireclickdetector, cd) -- try twice
+    
+    -- Teleport and stabilize
+    hrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
+    hrp.Velocity = Vector3.new(0,0,0)
+    
+    -- Focus camera on item (some executors/games check this)
+    local cam = workspace.CurrentCamera
+    if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, pos) end
+    
+    task.wait(0.35)
+    
+    -- Try ProximityPrompt
+    local pp = item:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if pp then pcall(fireproximityprompt, pp) end
+    
+    -- Try ClickDetector with multiple distance arguments
+    local cd = item:FindFirstChildWhichIsA("ClickDetector", true)
+    if cd then
+        pcall(fireclickdetector, cd, 0)
+        task.wait(0.1)
+        pcall(fireclickdetector, cd, 10)
+    end
 end
 
 -- autofarm
@@ -421,16 +437,15 @@ end
 -- auto sell
 local VIM = game:GetService("VirtualInputManager")
 
-local function getSellCD()
+local function getMerchant()
     local d = workspace:FindFirstChild("Dialogues")
     if not d then return nil end
-    local merchant = nil
     for _, v in ipairs(d:GetChildren()) do
         if v.Name:lower():find("merchant") or v.Name:lower():find("plox") then
-            merchant = v; break
+            return v
         end
     end
-    return merchant and merchant:FindFirstChildWhichIsA("ClickDetector", true)
+    return nil
 end
 
 local function waitForBtn(optName, timeout)
@@ -475,10 +490,15 @@ local function getOptText(iact, optName)
 end
 
 local function doSellItem(itemName)
-    local cd = getSellCD()
+    local m = getMerchant()
+    local cd = m and m:FindFirstChildWhichIsA("ClickDetector", true)
     if not cd then print("[sell] no Merchant found"); return end
     print("[sell] -> " .. itemName)
-    pcall(fireclickdetector, cd)
+    
+    pcall(fireclickdetector, cd, 0)
+    task.wait(0.2)
+    pcall(fireclickdetector, cd, 10)
+    
     local iact, _ = waitForBtn("Option1", 8)
     if not iact then print("[sell] dialog timed out - UI not detected"); return end
     local tool = LP.Backpack:FindFirstChild(itemName)
@@ -1019,3 +1039,12 @@ end)
 startESP()
 startNoclip()
 print("[skid:r] ready")
+
+-- Executor Compatibility Test
+task.delay(1, function()
+    if fireclickdetector then
+        print("[skid:r] info: fireclickdetector is supported by this executor.")
+    else
+        warn("[skid:r] CRITICAL: fireclickdetector is NOT supported by this executor. Farming and Selling will not work.")
+    end
+end)
