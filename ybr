@@ -270,24 +270,36 @@ local function tpClick(item)
     local pos=getPos(item); if not pos then return end
     local c=LP.Character; if not c then return end
     local hrp=c:FindFirstChild("HumanoidRootPart"); if not hrp then return end
+    local hum=c:FindFirstChildOfClass("Humanoid")
     
     -- Teleport and stabilize
     hrp.CFrame = CFrame.new(pos + Vector3.new(0, 2, 0))
     hrp.Velocity = Vector3.new(0,0,0)
+    if hum then hum.Sit = false end -- Ensure not sitting (can block clicks)
     
-    -- Focus camera on item (some executors/games check this)
+    -- Focus camera
     local cam = workspace.CurrentCamera
     if cam then cam.CFrame = CFrame.new(cam.CFrame.Position, pos) end
     
-    task.wait(0.35)
+    task.wait(0.45) -- longer wait for server sync
+    if not item.Parent then return end -- Item gone already
     
-    -- Try ProximityPrompt
+    -- 1. Try TouchInterest (if exists)
+    local ti = item:FindFirstChildWhichIsA("TouchInterest", true)
+    if ti and ti.Parent and ti.Parent:IsA("BasePart") then
+        pcall(firetouchinterest, hrp, ti.Parent, 0)
+        task.wait(0.05)
+        pcall(firetouchinterest, hrp, ti.Parent, 1)
+    end
+    
+    -- 2. Try ProximityPrompt
     local pp = item:FindFirstChildWhichIsA("ProximityPrompt", true)
     if pp then pcall(fireproximityprompt, pp) end
     
-    -- Try ClickDetector with multiple distance arguments
+    -- 3. Try ClickDetector
     local cd = item:FindFirstChildWhichIsA("ClickDetector", true)
     if cd then
+        print("[farm] interacting with " .. item.Name)
         pcall(fireclickdetector, cd, 0)
         task.wait(0.1)
         pcall(fireclickdetector, cd, 10)
